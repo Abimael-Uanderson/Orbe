@@ -1,18 +1,674 @@
 <script lang="ts">
- import Alert from '../../design-system/components/Alert.svelte';import Button from '../../design-system/components/Button.svelte';import Card from '../../design-system/components/Card.svelte';import FormField from '../../design-system/components/FormField.svelte';import PageHeader from '../../design-system/components/PageHeader.svelte';import Toast from '../../design-system/components/Toast.svelte';import PatientDialog from './PatientDialog.svelte';import {dailyAppointments,type QueueStatus} from '../../mocks/employee';import {vaccines} from '../../mocks/portal';import {getPatients,getQueueStatuses,registerApplication,savePatients,saveQueueStatuses,type ApplicationRecord,type StoredPatient} from '../../lib/mockOperations';
- let{mode,onNavigate}:{mode:'dashboard'|'agenda'|'patients'|'application';onNavigate:(page:string)=>void}=$props();let statuses=$state<Record<string,QueueStatus>>(getQueueStatuses());let patients=$state<StoredPatient[]>(getPatients());let query=$state('');let applied=$state(false);let selectedPatient=$state('');let selectedVaccine=$state('');let batch=$state('');let dose=$state('');let receipt=$state<ApplicationRecord|null>(null);let patientDialog=$state(false);let editingPatient=$state<StoredPatient|null>(null);let toast=$state('');
- const labels:Record<QueueStatus,string>={confirmed:'Confirmado',waiting:'Na espera',in_service:'Em atendimento',completed:'Concluído'};let filteredPatients=$derived(patients.filter(p=>p.name.toLowerCase().includes(query.toLowerCase())||p.cpf.includes(query)));
- function advance(id:string){const order:QueueStatus[]=['confirmed','waiting','in_service','completed'];const current=order.indexOf(statuses[id]);if(current<3){statuses={...statuses,[id]:order[current+1]};saveQueueStatuses(statuses);toast=`Atendimento atualizado para “${labels[statuses[id]]}”.`}}
- function submit(e:SubmitEvent){e.preventDefault();const patient=patients.find(p=>p.id===selectedPatient);const vaccine=vaccines.find(v=>v.id===selectedVaccine);if(selectedPatient&&selectedVaccine&&batch&&dose&&patient&&vaccine){receipt=registerApplication({patientId:patient.id,patientName:patient.name,vaccineId:vaccine.id,vaccineName:vaccine.name,batch,dose,date:'2026-07-22',time:'09:15',type:'Agendado',route:'Intramuscular',site:'Deltoide direito',professional:'Ana Ribeiro · COREN 123456'});patients=getPatients();applied=true}}
- function savePatient(patient:StoredPatient){const index=patients.findIndex(p=>p.id===patient.id);patients=index>=0?patients.map(p=>p.id===patient.id?patient:p):[patient,...patients];savePatients(patients);patientDialog=false;editingPatient=null;toast=index>=0?'Paciente atualizado com sucesso.':'Paciente cadastrado com sucesso.'}
+  import Alert from '../../design-system/components/Alert.svelte';
+  import Button from '../../design-system/components/Button.svelte';
+  import Card from '../../design-system/components/Card.svelte';
+  import FormField from '../../design-system/components/FormField.svelte';
+  import PageHeader from '../../design-system/components/PageHeader.svelte';
+  import Toast from '../../design-system/components/Toast.svelte';
+  import CollectionPanel from '../../design-system/components/CollectionPanel.svelte';
+  import ViewModeToggle from '../../design-system/components/ViewModeToggle.svelte';
+  import PatientDialog from './PatientDialog.svelte';
+  import { dailyAppointments, type QueueStatus } from '../../mocks/employee';
+  import { vaccines } from '../../mocks/portal';
+  import {
+    getPatients,
+    getQueueStatuses,
+    registerApplication,
+    savePatients,
+    saveQueueStatuses,
+    type ApplicationRecord,
+    type StoredPatient,
+  } from '../../lib/mockOperations';
+  let {
+    mode,
+    onNavigate,
+  }: { mode: 'dashboard' | 'agenda' | 'patients' | 'application'; onNavigate: (page: string) => void } = $props();
+  let statuses = $state<Record<string, QueueStatus>>(getQueueStatuses());
+  let patients = $state<StoredPatient[]>(getPatients());
+  let query = $state('');
+  let applied = $state(false);
+  let selectedPatient = $state('');
+  let selectedVaccine = $state('');
+  let batch = $state('');
+  let dose = $state('');
+  let receipt = $state<ApplicationRecord | null>(null);
+  let patientDialog = $state(false);
+  let editingPatient = $state<StoredPatient | null>(null);
+  let toast = $state('');
+  let agendaView = $state<'grid' | 'list'>(
+    (localStorage.getItem('orbe-view-staff-agenda') as 'grid' | 'list') ?? 'list',
+  );
+  let patientView = $state<'grid' | 'list'>(
+    (localStorage.getItem('orbe-view-staff-patients') as 'grid' | 'list') ?? 'list',
+  );
+  $effect(() => localStorage.setItem('orbe-view-staff-agenda', agendaView));
+  $effect(() => localStorage.setItem('orbe-view-staff-patients', patientView));
+  const labels: Record<QueueStatus, string> = {
+    confirmed: 'Confirmado',
+    waiting: 'Na espera',
+    in_service: 'Em atendimento',
+    completed: 'Concluído',
+  };
+  let filteredPatients = $derived(
+    patients.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()) || p.cpf.includes(query)),
+  );
+  function advance(id: string) {
+    const order: QueueStatus[] = ['confirmed', 'waiting', 'in_service', 'completed'];
+    const current = order.indexOf(statuses[id]);
+    if (current < 3) {
+      statuses = { ...statuses, [id]: order[current + 1] };
+      saveQueueStatuses(statuses);
+      toast = `Atendimento atualizado para “${labels[statuses[id]]}”.`;
+    }
+  }
+  function submit(e: SubmitEvent) {
+    e.preventDefault();
+    const patient = patients.find((p) => p.id === selectedPatient);
+    const vaccine = vaccines.find((v) => v.id === selectedVaccine);
+    if (selectedPatient && selectedVaccine && batch && dose && patient && vaccine) {
+      receipt = registerApplication({
+        patientId: patient.id,
+        patientName: patient.name,
+        vaccineId: vaccine.id,
+        vaccineName: vaccine.name,
+        batch,
+        dose,
+        date: '2026-07-22',
+        time: '09:15',
+        type: 'Agendado',
+        route: 'Intramuscular',
+        site: 'Deltoide direito',
+        professional: 'Ana Ribeiro · COREN 123456',
+      });
+      patients = getPatients();
+      applied = true;
+    }
+  }
+  function savePatient(patient: StoredPatient) {
+    const index = patients.findIndex((p) => p.id === patient.id);
+    patients = index >= 0 ? patients.map((p) => (p.id === patient.id ? patient : p)) : [patient, ...patients];
+    savePatients(patients);
+    patientDialog = false;
+    editingPatient = null;
+    toast = index >= 0 ? 'Paciente atualizado com sucesso.' : 'Paciente cadastrado com sucesso.';
+  }
 </script>
+
 <div class="page">
-{#if mode==='dashboard'}<PageHeader eyebrow="Operação da clínica" title="Boa noite, Ana" description="Acompanhe a operação e os atendimentos de hoje."/>
- <div class="stats">{#each [{n:'12',l:'Agendados hoje',c:''},{n:'3',l:'Na sala de espera',c:'warning'},{n:'7',l:'Atendimentos concluídos',c:'success'},{n:'2',l:'Lotes em alerta',c:'danger'}] as item}<Card><div class="stat {item.c}"><strong>{item.n}</strong><span>{item.l}</span></div></Card>{/each}</div>
- <div class="dashboard-grid"><section><div class="heading"><div><h2>Próximos atendimentos</h2><p>Agenda da unidade Centro.</p></div><button onclick={()=>onNavigate('staff-agenda')}>Ver agenda completa</button></div><div class="queue">{#each dailyAppointments.slice(1,5) as item}<article><time>{item.time}</time><div><strong>{item.patient}</strong><small>{item.vaccine} · {item.dose}</small></div><span class={statuses[item.id]}>{labels[statuses[item.id]]}</span></article>{/each}</div></section><aside><h2>Ações rápidas</h2><button onclick={()=>onNavigate('staff-application')}><span>✚</span><strong>Registrar aplicação</strong><small>Atestar vacina e consumir lote</small></button><button onclick={()=>onNavigate('staff-patients')}><span>♧</span><strong>Cadastrar paciente</strong><small>Novo titular ou dependente</small></button></aside></div>
-{:else if mode==='agenda'}<PageHeader eyebrow="Atendimentos" title="Agenda do dia" description="Quarta-feira, 22 de julho de 2026 · Unidade Centro">{#snippet actions()}<Button variant="secondary">Calendário</Button><Button>Encaixe</Button>{/snippet}</PageHeader><div class="toolbar"><input placeholder="Buscar paciente"/><select><option>Todos os status</option><option>Confirmados</option><option>Na espera</option></select></div><div class="agenda">{#each dailyAppointments as item}<article><time>{item.time}</time><div class="patient"><strong>{item.patient}</strong><small>{item.cpf}</small></div><div><strong>{item.vaccine}</strong><small>{item.dose} · {item.room}</small></div><span class={statuses[item.id]}>{labels[statuses[item.id]]}</span><Button size="sm" variant={statuses[item.id]==='completed'?'secondary':'primary'} disabled={statuses[item.id]==='completed'} onclick={()=>advance(item.id)}>{statuses[item.id]==='confirmed'?'Fazer check-in':statuses[item.id]==='waiting'?'Iniciar':statuses[item.id]==='in_service'?'Concluir':'Concluído'}</Button></article>{/each}</div>
-{:else if mode==='patients'}<PageHeader eyebrow="Cadastros" title="Pacientes" description="Consulte históricos e mantenha os dados cadastrais atualizados.">{#snippet actions()}<Button onclick={()=>{editingPatient=null;patientDialog=true}}>Novo paciente</Button>{/snippet}</PageHeader><div class="toolbar"><input placeholder="Buscar por nome ou CPF" bind:value={query}/></div><div class="table"><div class="tr head"><span>Paciente</span><span>CPF</span><span>Contato</span><span>Última vacina</span><span></span></div>{#each filteredPatients as person}<div class="tr"><span><strong>{person.name}</strong><small>Nascimento: {person.birth}</small></span><span>{person.cpf}</span><span>{person.phone}</span><span>{person.lastVaccine}</span><button onclick={()=>{editingPatient=person;patientDialog=true}}>Editar →</button></div>{/each}</div>
-{:else}<PageHeader eyebrow="Registro clínico" title="Registrar aplicação" description="Confirme os dados da vacina aplicada e o lote utilizado."/>{#if applied&&receipt}<div class="success"><Alert tone="success"><strong>Aplicação registrada.</strong> O estoque do lote foi atualizado e o evento entrou na auditoria.</Alert><Card><div class="receipt"><p>Comprovante de aplicação</p><h2>{receipt.vaccineName}</h2><dl><div><dt>Protocolo</dt><dd>{receipt.protocol}</dd></div><div><dt>Paciente</dt><dd>{receipt.patientName}</dd></div><div><dt>Dose e lote</dt><dd>{receipt.dose} · {receipt.batch}</dd></div><div><dt>Data e horário</dt><dd>22/07/2026 · {receipt.time}</dd></div><div><dt>Profissional</dt><dd>{receipt.professional}</dd></div><div><dt>Local</dt><dd>{receipt.site}</dd></div></dl></div></Card><div class="receipt-actions"><Button variant="secondary">Imprimir comprovante</Button><Button onclick={()=>{applied=false;receipt=null;selectedPatient='';selectedVaccine='';batch='';dose=''}}>Registrar outra aplicação</Button></div></div>{:else}<form onsubmit={submit}><Card padding="lg"><div class="form-title"><h2>Paciente e vacina</h2><p>Todos os campos marcados são obrigatórios.</p></div><div class="form-grid"><label>Paciente<select bind:value={selectedPatient} required><option value="">Selecione</option>{#each patients.filter(p=>p.status==='Ativo') as p}<option value={p.id}>{p.name} · {p.cpf}</option>{/each}</select></label><label>Vacina<select bind:value={selectedVaccine} required><option value="">Selecione</option>{#each vaccines as v}<option value={v.id}>{v.name}</option>{/each}</select></label><label>Lote<select bind:value={batch} required><option value="">Selecione</option><option value="LT-260701">LT-260701 · Val. 03/2027 · estoque disponível</option><option value="LT-260615">LT-260615 · Val. 12/2026 · estoque disponível</option></select></label><FormField id="dose" label="Dose" placeholder="Ex.: 2ª dose" value={dose} oninput={(v)=>dose=v} required/></div></Card><Card padding="lg"><div class="form-title"><h2>Dados da aplicação</h2><p>Informações que constarão na carteira vacinal.</p></div><div class="form-grid"><FormField id="application-date" label="Data" type="date" value="2026-07-22"/><FormField id="application-time" label="Horário" value="09:15"/><label>Tipo de atendimento<select><option>Agendado</option><option>Encaixe</option><option>Domiciliar</option></select></label><label>Via de administração<select><option>Intramuscular</option><option>Subcutânea</option><option>Oral</option></select></label><FormField id="site" label="Local de aplicação" value="Deltoide direito"/><FormField id="professional" label="Profissional" value="Ana Ribeiro · COREN 123456" disabled/></div></Card><Alert tone="danger">Confira vacina, dose e lote antes de concluir. O registro clínico exigirá correção auditada após a confirmação.</Alert><div class="submit"><Button variant="secondary" onclick={()=>onNavigate('staff-agenda')}>Cancelar</Button><Button type="submit">Confirmar aplicação</Button></div></form>{/if}{/if}</div>
-{#if patientDialog}<PatientDialog initial={editingPatient??undefined} onSave={savePatient} onCancel={()=>{patientDialog=false;editingPatient=null}}/>{/if}
-{#if toast}<Toast message={toast} onClose={()=>toast=''}/>{/if}
-<style>.page{width:min(100%,var(--content-max));margin:0 auto;padding:var(--space-10)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4);margin-top:var(--space-8)}.stat{display:grid;gap:var(--space-2)}.stat strong{font-size:var(--text-3xl)}.stat span{color:var(--text-secondary);font-size:var(--text-sm)}.stat.warning strong{color:var(--status-warning)}.stat.success strong{color:var(--status-success)}.stat.danger strong{color:var(--status-danger)}.dashboard-grid{display:grid;grid-template-columns:2fr 1fr;gap:var(--space-5);margin-top:var(--space-8)}.dashboard-grid>section,.dashboard-grid>aside{border:1px solid var(--border-subtle);border-radius:var(--radius-lg);background:var(--surface-card);padding:var(--space-6)}.heading{display:flex;justify-content:space-between}.heading h2,.dashboard-grid aside h2{font-size:var(--text-lg)}.heading p{margin-top:.25rem;color:var(--text-secondary);font-size:var(--text-sm)}.heading button{border:0;background:transparent;color:var(--color-brand-500);font-weight:700;cursor:pointer}.queue{margin-top:var(--space-4)}.queue article{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--space-4);border-top:1px solid var(--border-subtle);padding:var(--space-4) 0}.queue time{font-weight:800}.queue article>div,.dashboard-grid aside button{display:grid;gap:.2rem}small{color:var(--text-secondary)}.queue article>span,.agenda article>span{border-radius:var(--radius-pill);padding:.3rem .6rem;font-size:var(--text-xs);font-weight:750}.confirmed{background:var(--color-brand-50);color:var(--color-brand-700)}.waiting{background:var(--status-warning-bg);color:var(--status-warning)}.in_service{background:var(--surface-subtle);color:var(--text-primary)}.completed{background:var(--status-success-bg);color:var(--status-success)}.dashboard-grid aside{display:flex;flex-direction:column;gap:var(--space-3)}.dashboard-grid aside h2{margin-bottom:var(--space-2)}.dashboard-grid aside button{border:1px solid var(--border-subtle);border-radius:var(--radius-md);background:var(--surface-card);padding:var(--space-4);text-align:left;cursor:pointer}.dashboard-grid aside button>span{color:var(--color-brand-500);font-size:1.3rem}.toolbar{display:flex;gap:var(--space-3);margin:var(--space-8) 0 var(--space-4)}input,select{min-height:2.75rem;border:1px solid var(--border-strong);border-radius:var(--radius-md);background:var(--surface-card);padding:0 var(--space-4);color:var(--text-primary)}.toolbar input{width:min(100%,25rem)}.agenda,.table{overflow:hidden;border:1px solid var(--border-subtle);border-radius:var(--radius-lg);background:var(--surface-card)}.agenda article{display:grid;grid-template-columns:4rem 1fr 1.5fr auto auto;align-items:center;gap:var(--space-5);border-bottom:1px solid var(--border-subtle);padding:var(--space-4) var(--space-5)}.agenda article:last-child{border:0}.agenda article>div{display:grid;gap:.25rem}.tr{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.4fr auto;align-items:center;gap:var(--space-4);border-bottom:1px solid var(--border-subtle);padding:var(--space-4) var(--space-5);font-size:var(--text-sm)}.tr:last-child{border:0}.tr.head{background:var(--surface-subtle);color:var(--text-secondary);font-size:var(--text-xs);font-weight:750}.tr>span{display:grid;gap:.25rem}.tr button{border:0;background:transparent;color:var(--color-brand-500);font-weight:700;cursor:pointer}form{display:grid;gap:var(--space-4);margin-top:var(--space-8)}.form-title{margin-bottom:var(--space-6)}.form-title h2{font-size:var(--text-lg)}.form-title p{margin-top:.3rem;color:var(--text-secondary);font-size:var(--text-sm)}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-5)}.form-grid>label{display:grid;gap:var(--space-2);font-size:var(--text-sm);font-weight:650}.submit{display:flex;justify-content:flex-end;gap:var(--space-3)}.success{display:grid;max-width:40rem;gap:var(--space-5);margin-top:var(--space-8)}@media(max-width:1000px){.stats{grid-template-columns:repeat(2,1fr)}.dashboard-grid{grid-template-columns:1fr}.agenda article{grid-template-columns:4rem 1fr auto}.agenda article>div:nth-of-type(2){display:none}.tr{grid-template-columns:1fr 1fr auto}.tr span:nth-child(3),.tr span:nth-child(4){display:none}}@media(max-width:680px){.page{padding:var(--space-5)}.stats,.form-grid{grid-template-columns:1fr}.agenda article{grid-template-columns:3rem 1fr}.agenda article>span,.agenda article>:global(button){grid-column:2}.tr{grid-template-columns:1fr auto}.tr span:nth-child(2){display:none}.toolbar{align-items:stretch;flex-direction:column}.toolbar input{width:100%}}</style>
+  {#if mode === 'dashboard'}<PageHeader
+      eyebrow="Operação da clínica"
+      title="Boa noite, Ana"
+      description="Acompanhe a operação e os atendimentos de hoje."
+    />
+    <div class="stats">
+      {#each [{ n: '12', l: 'Agendados hoje', c: '' }, { n: '3', l: 'Na sala de espera', c: 'warning' }, { n: '7', l: 'Atendimentos concluídos', c: 'success' }, { n: '2', l: 'Lotes em alerta', c: 'danger' }] as item}<Card
+          ><div class="stat {item.c}"><strong>{item.n}</strong><span>{item.l}</span></div></Card
+        >{/each}
+    </div>
+    <div class="dashboard-grid">
+      <section>
+        <div class="heading">
+          <div>
+            <h2>Próximos atendimentos</h2>
+            <p>Agenda da unidade Centro.</p>
+          </div>
+          <button onclick={() => onNavigate('staff-agenda')}>Ver agenda completa</button>
+        </div>
+        <div class="queue">
+          {#each dailyAppointments.slice(1, 5) as item}<article>
+              <time>{item.time}</time>
+              <div><strong>{item.patient}</strong><small>{item.vaccine} · {item.dose}</small></div>
+              <span class={statuses[item.id]}>{labels[statuses[item.id]]}</span>
+            </article>{/each}
+        </div>
+      </section>
+      <aside>
+        <h2>Ações rápidas</h2>
+        <button onclick={() => onNavigate('staff-application')}
+          ><span>✚</span><strong>Registrar aplicação</strong><small>Atestar vacina e consumir lote</small></button
+        ><button
+          onclick={() => {
+            editingPatient = null;
+            patientDialog = true;
+          }}><span>♧</span><strong>Cadastrar paciente</strong><small>Novo titular ou dependente</small></button
+        >
+      </aside>
+    </div>
+  {:else if mode === 'agenda'}<PageHeader
+      eyebrow="Atendimentos"
+      title="Agenda do dia"
+      description="Quarta-feira, 22 de julho de 2026 · Unidade Centro"
+      >{#snippet actions()}<Button
+          variant="secondary"
+          onclick={() => (toast = 'Exibindo a agenda de 22 de julho de 2026.')}>Calendário</Button
+        ><Button onclick={() => onNavigate('staff-application')}>Novo encaixe</Button>{/snippet}</PageHeader
+    >
+    <div class="collection">
+      <CollectionPanel title="Atendimentos do dia" description={`${dailyAppointments.length} horários na agenda`}>
+        {#snippet actions()}<ViewModeToggle bind:value={agendaView} />{/snippet}
+        <div class="toolbar">
+          <input placeholder="Buscar paciente" /><select
+            ><option>Todos os status</option><option>Confirmados</option><option>Na espera</option></select
+          >
+        </div>
+        <div class="agenda {agendaView}">
+          {#each dailyAppointments as item}<article>
+              <time>{item.time}</time>
+              <div class="patient"><strong>{item.patient}</strong><small>{item.cpf}</small></div>
+              <div><strong>{item.vaccine}</strong><small>{item.dose} · {item.room}</small></div>
+              <span class={statuses[item.id]}>{labels[statuses[item.id]]}</span><Button
+                size="sm"
+                variant={statuses[item.id] === 'completed' ? 'secondary' : 'primary'}
+                disabled={statuses[item.id] === 'completed'}
+                onclick={() => advance(item.id)}
+                >{statuses[item.id] === 'confirmed'
+                  ? 'Fazer check-in'
+                  : statuses[item.id] === 'waiting'
+                    ? 'Iniciar'
+                    : statuses[item.id] === 'in_service'
+                      ? 'Concluir'
+                      : 'Concluído'}</Button
+              >
+            </article>{/each}
+        </div></CollectionPanel
+      >
+    </div>
+  {:else if mode === 'patients'}<PageHeader
+      eyebrow="Cadastros"
+      title="Pacientes"
+      description="Consulte históricos e mantenha os dados cadastrais atualizados."
+      >{#snippet actions()}<Button
+          onclick={() => {
+            editingPatient = null;
+            patientDialog = true;
+          }}>Novo paciente</Button
+        >{/snippet}</PageHeader
+    >
+    <div class="collection">
+      <CollectionPanel title="Pacientes cadastrados" description={`${filteredPatients.length} registros encontrados`}>
+        {#snippet actions()}<ViewModeToggle bind:value={patientView} />{/snippet}
+        <div class="toolbar"><input placeholder="Buscar por nome ou CPF" bind:value={query} /></div>
+        <div class="table {patientView}">
+          <div class="tr head">
+            <span>Paciente</span><span>CPF</span><span>Contato</span><span>Última vacina</span><span></span>
+          </div>
+          {#each filteredPatients as person}<div class="tr">
+              <span><strong>{person.name}</strong><small>Nascimento: {person.birth}</small></span><span
+                >{person.cpf}</span
+              ><span>{person.phone}</span><span>{person.lastVaccine}</span><button
+                onclick={() => {
+                  editingPatient = person;
+                  patientDialog = true;
+                }}>Editar →</button
+              >
+            </div>{/each}
+        </div></CollectionPanel
+      >
+    </div>
+  {:else}<PageHeader
+      eyebrow="Registro clínico"
+      title="Registrar aplicação"
+      description="Confirme os dados da vacina aplicada e o lote utilizado."
+    />{#if applied && receipt}<div class="success">
+        <Alert tone="success"
+          ><strong>Aplicação registrada.</strong> O estoque do lote foi atualizado e o evento entrou na auditoria.</Alert
+        ><Card
+          ><div class="receipt">
+            <p>Comprovante de aplicação</p>
+            <h2>{receipt.vaccineName}</h2>
+            <dl>
+              <div>
+                <dt>Protocolo</dt>
+                <dd>{receipt.protocol}</dd>
+              </div>
+              <div>
+                <dt>Paciente</dt>
+                <dd>{receipt.patientName}</dd>
+              </div>
+              <div>
+                <dt>Dose e lote</dt>
+                <dd>{receipt.dose} · {receipt.batch}</dd>
+              </div>
+              <div>
+                <dt>Data e horário</dt>
+                <dd>22/07/2026 · {receipt.time}</dd>
+              </div>
+              <div>
+                <dt>Profissional</dt>
+                <dd>{receipt.professional}</dd>
+              </div>
+              <div>
+                <dt>Local</dt>
+                <dd>{receipt.site}</dd>
+              </div>
+            </dl>
+          </div></Card
+        >
+        <div class="receipt-actions">
+          <Button variant="secondary" onclick={() => window.print()}>Imprimir comprovante</Button><Button
+            onclick={() => {
+              applied = false;
+              receipt = null;
+              selectedPatient = '';
+              selectedVaccine = '';
+              batch = '';
+              dose = '';
+            }}>Registrar outra aplicação</Button
+          >
+        </div>
+      </div>{:else}<form onsubmit={submit}>
+        <Card padding="lg"
+          ><div class="form-title">
+            <h2>Paciente e vacina</h2>
+            <p>Todos os campos marcados são obrigatórios.</p>
+          </div>
+          <div class="form-grid">
+            <label
+              >Paciente<select bind:value={selectedPatient} required
+                ><option value="">Selecione</option>{#each patients.filter((p) => p.status === 'Ativo') as p}<option
+                    value={p.id}>{p.name} · {p.cpf}</option
+                  >{/each}</select
+              ></label
+            ><label
+              >Vacina<select bind:value={selectedVaccine} required
+                ><option value="">Selecione</option>{#each vaccines as v}<option value={v.id}>{v.name}</option
+                  >{/each}</select
+              ></label
+            ><label
+              >Lote<select bind:value={batch} required
+                ><option value="">Selecione</option><option value="LT-260701"
+                  >LT-260701 · Val. 03/2027 · estoque disponível</option
+                ><option value="LT-260615">LT-260615 · Val. 12/2026 · estoque disponível</option></select
+              ></label
+            ><FormField
+              id="dose"
+              label="Dose"
+              placeholder="Ex.: 2ª dose"
+              value={dose}
+              oninput={(v) => (dose = v)}
+              required
+            />
+          </div></Card
+        ><Card padding="lg"
+          ><div class="form-title">
+            <h2>Dados da aplicação</h2>
+            <p>Informações que constarão na carteira vacinal.</p>
+          </div>
+          <div class="form-grid">
+            <FormField id="application-date" label="Data" type="date" value="2026-07-22" /><FormField
+              id="application-time"
+              label="Horário"
+              value="09:15"
+            /><label
+              >Tipo de atendimento<select
+                ><option>Agendado</option><option>Encaixe</option><option>Domiciliar</option></select
+              ></label
+            ><label
+              >Via de administração<select
+                ><option>Intramuscular</option><option>Subcutânea</option><option>Oral</option></select
+              ></label
+            ><FormField id="site" label="Local de aplicação" value="Deltoide direito" /><FormField
+              id="professional"
+              label="Profissional"
+              value="Ana Ribeiro · COREN 123456"
+              disabled
+            />
+          </div></Card
+        ><Alert tone="danger"
+          >Confira vacina, dose e lote antes de concluir. O registro clínico exigirá correção auditada após a
+          confirmação.</Alert
+        >
+        <div class="submit">
+          <Button variant="secondary" onclick={() => onNavigate('staff-agenda')}>Cancelar</Button><Button type="submit"
+            >Confirmar aplicação</Button
+          >
+        </div>
+      </form>{/if}{/if}
+</div>
+{#if patientDialog}<PatientDialog
+    initial={editingPatient ?? undefined}
+    onSave={savePatient}
+    onCancel={() => {
+      patientDialog = false;
+      editingPatient = null;
+    }}
+  />{/if}
+{#if toast}<Toast message={toast} onClose={() => (toast = '')} />{/if}
+
+<style>
+  .page {
+    width: min(100%, var(--content-max));
+    margin: 0 auto;
+    padding: var(--space-8);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+  .stat {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .stat strong {
+    font-size: var(--text-3xl);
+  }
+  .stat span {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .stat.warning strong {
+    color: var(--status-warning);
+  }
+  .stat.success strong {
+    color: var(--status-success);
+  }
+  .stat.danger strong {
+    color: var(--status-danger);
+  }
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+  }
+  .dashboard-grid > section,
+  .dashboard-grid > aside {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+    padding: var(--space-5);
+  }
+  .heading {
+    display: flex;
+    justify-content: space-between;
+  }
+  .heading h2,
+  .dashboard-grid aside h2 {
+    font-size: var(--text-lg);
+  }
+  .heading p {
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .heading button {
+    border: 0;
+    background: transparent;
+    color: var(--color-brand-500);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .queue {
+    margin-top: var(--space-4);
+  }
+  .queue article {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+    padding: var(--space-4) 0;
+  }
+  .queue time {
+    font-weight: 800;
+  }
+  .queue article > div,
+  .dashboard-grid aside button {
+    display: grid;
+    gap: 0.2rem;
+  }
+  small {
+    color: var(--text-secondary);
+  }
+  .queue article > span,
+  .agenda article > span {
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 0.6rem;
+    font-size: var(--text-xs);
+    font-weight: 750;
+  }
+  .confirmed {
+    background: var(--color-brand-50);
+    color: var(--color-brand-700);
+  }
+  .waiting {
+    background: var(--status-warning-bg);
+    color: var(--status-warning);
+  }
+  .in_service {
+    background: var(--surface-subtle);
+    color: var(--text-primary);
+  }
+  .completed {
+    background: var(--status-success-bg);
+    color: var(--status-success);
+  }
+  .dashboard-grid aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .dashboard-grid aside h2 {
+    margin-bottom: var(--space-2);
+  }
+  .dashboard-grid aside button {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    padding: var(--space-4);
+    text-align: left;
+    cursor: pointer;
+  }
+  .dashboard-grid aside button > span {
+    color: var(--color-brand-500);
+    font-size: 1.3rem;
+  }
+  .toolbar {
+    display: flex;
+    gap: var(--space-3);
+    margin: 0 0 var(--space-4);
+  }
+  .collection {
+    margin-top: var(--space-6);
+  }
+  input,
+  select {
+    min-height: 2.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    padding: 0 var(--space-4);
+    color: var(--text-primary);
+  }
+  .toolbar input {
+    width: min(100%, 25rem);
+  }
+  .agenda,
+  .table {
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+  }
+  .agenda article {
+    display: grid;
+    grid-template-columns: 4rem 1fr 1.5fr auto auto;
+    align-items: center;
+    gap: var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--space-4) var(--space-5);
+  }
+  .agenda article:last-child {
+    border: 0;
+  }
+  .agenda article > div {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .agenda.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    overflow: visible;
+    border: 0;
+  }
+  .agenda.grid article {
+    grid-template-columns: 3rem 1fr auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+  .agenda.grid article > div:nth-of-type(2) {
+    grid-column: 2 / -1;
+  }
+  .agenda.grid article > :global(button) {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+  .tr {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr 1.4fr auto;
+    align-items: center;
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--space-4) var(--space-5);
+    font-size: var(--text-sm);
+  }
+  .tr:last-child {
+    border: 0;
+  }
+  .tr.head {
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 750;
+  }
+  .tr > span {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .tr button {
+    border: 0;
+    background: transparent;
+    color: var(--color-brand-500);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .table.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    overflow: visible;
+    border: 0;
+  }
+  .table.grid .tr.head {
+    display: none;
+  }
+  .table.grid .tr {
+    grid-template-columns: 1fr auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+  .table.grid .tr > span:nth-child(n + 2) {
+    grid-column: 1;
+  }
+  .table.grid .tr button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  form {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+  .form-title {
+    margin-bottom: var(--space-6);
+  }
+  .form-title h2 {
+    font-size: var(--text-lg);
+  }
+  .form-title p {
+    margin-top: 0.3rem;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+  }
+  .form-grid > label {
+    display: grid;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 650;
+  }
+  .submit {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+  .success {
+    display: grid;
+    max-width: 40rem;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+  }
+  @media (max-width: 1000px) {
+    .agenda.grid,
+    .table.grid {
+      grid-template-columns: 1fr;
+    }
+    .stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+    .agenda article {
+      grid-template-columns: 4rem 1fr auto;
+    }
+    .agenda article > div:nth-of-type(2) {
+      display: none;
+    }
+    .tr {
+      grid-template-columns: 1fr 1fr auto;
+    }
+    .tr span:nth-child(3),
+    .tr span:nth-child(4) {
+      display: none;
+    }
+  }
+  @media (max-width: 680px) {
+    .page {
+      padding: var(--space-5);
+    }
+    .stats,
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+    .agenda article {
+      grid-template-columns: 3rem 1fr;
+    }
+    .agenda article > span,
+    .agenda article > :global(button) {
+      grid-column: 2;
+    }
+    .tr {
+      grid-template-columns: 1fr auto;
+    }
+    .tr span:nth-child(2) {
+      display: none;
+    }
+    .toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .toolbar input {
+      width: 100%;
+    }
+  }
+</style>
