@@ -1,10 +1,381 @@
 <script lang="ts">
-  import Alert from '../../design-system/components/Alert.svelte';import Button from '../../design-system/components/Button.svelte';import Card from '../../design-system/components/Card.svelte';import FormField from '../../design-system/components/FormField.svelte';import PageHeader from '../../design-system/components/PageHeader.svelte';import {dependents,insurances} from '../../mocks/portal';import {currentPatient} from '../../mocks/patient';
-  let{mode}:{mode:'family'|'insurance'|'profile'}=$props();let saved=$state(false);
-  const metadata={family:{eyebrow:'Família',title:'Meus dependentes',description:'Gerencie as pessoas vinculadas à sua conta.'},insurance:{eyebrow:'Atendimento',title:'Meus convênios',description:'Mantenha os dados dos seus planos de saúde atualizados.'},profile:{eyebrow:'Minha conta',title:'Dados cadastrais',description:'Revise suas informações pessoais e de contato.'}};
+  import Alert from '../../design-system/components/Alert.svelte';
+  import Button from '../../design-system/components/Button.svelte';
+  import Card from '../../design-system/components/Card.svelte';
+  import FormField from '../../design-system/components/FormField.svelte';
+  import PageHeader from '../../design-system/components/PageHeader.svelte';
+  import Toast from '../../design-system/components/Toast.svelte';
+  import CollectionPanel from '../../design-system/components/CollectionPanel.svelte';
+  import ViewModeToggle from '../../design-system/components/ViewModeToggle.svelte';
+  import PortalRecordDialog from './PortalRecordDialog.svelte';
+  import { dependents as seedDependents, insurances as seedInsurances } from '../../mocks/portal';
+  import { currentPatient } from '../../mocks/patient';
+
+  let { mode }: { mode: 'family' | 'insurance' | 'profile' } = $props();
+  type Row = Record<string, string>;
+  const read = (key: string, fallback: Row[]) => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  let family = $state<Row[]>(
+    read(
+      'orbe-portal-dependents',
+      seedDependents.map((item) => ({ ...item, active: 'true' })),
+    ),
+  );
+  let insurance = $state<Row[]>(
+    read(
+      'orbe-portal-insurance',
+      seedInsurances.map((item) => ({ ...item, active: String(item.active) })),
+    ),
+  );
+  let dialog = $state<'dependent' | 'insurance' | null>(null);
+  let editing = $state<Row | null>(null);
+  let toast = $state('');
+  let cardView = $state<Row | null>(null);
+  let viewMode = $state<'grid' | 'list'>((localStorage.getItem('orbe-view-account') as 'grid' | 'list') ?? 'grid');
+  const metadata = {
+    family: {
+      eyebrow: 'Família',
+      title: 'Meus dependentes',
+      description: 'Gerencie as pessoas vinculadas à sua conta.',
+    },
+    insurance: {
+      eyebrow: 'Atendimento',
+      title: 'Meus convênios',
+      description: 'Mantenha os dados dos seus planos de saúde atualizados.',
+    },
+    profile: {
+      eyebrow: 'Minha conta',
+      title: 'Dados cadastrais',
+      description: 'Revise suas informações pessoais e de contato.',
+    },
+  };
+  $effect(() => localStorage.setItem('orbe-portal-dependents', JSON.stringify(family)));
+  $effect(() => localStorage.setItem('orbe-portal-insurance', JSON.stringify(insurance)));
+  $effect(() => localStorage.setItem('orbe-view-account', viewMode));
+
+  function saveRecord(values: Row) {
+    if (dialog === 'dependent')
+      family = family.some((item) => item.id === values.id)
+        ? family.map((item) => (item.id === values.id ? values : item))
+        : [values, ...family];
+    else
+      insurance = insurance.some((item) => item.id === values.id)
+        ? insurance.map((item) => (item.id === values.id ? values : item))
+        : [values, ...insurance];
+    toast = editing ? 'Registro atualizado com sucesso.' : 'Registro cadastrado com sucesso.';
+    dialog = null;
+    editing = null;
+  }
 </script>
-<div class="page"><PageHeader {...metadata[mode]}>{#snippet actions()}<Button>{mode==='family'?'Adicionar dependente':mode==='insurance'?'Adicionar convênio':'Salvar alterações'}</Button>{/snippet}</PageHeader>{#if saved}<div class="feedback"><Alert tone="success">Alterações salvas com sucesso.</Alert></div>{/if}
-{#if mode==='family'}<div class="cards">{#each dependents as person}<Card><article class="person"><div class="avatar">{person.name.slice(0,1)}</div><div><h2>{person.name}</h2><p>{person.relationship} · {person.age}</p><dl><div><dt>Nascimento</dt><dd>{person.birthDate}</dd></div><div><dt>CPF</dt><dd>{person.cpf}</dd></div></dl></div><button>•••</button></article></Card>{/each}</div>
-{:else if mode==='insurance'}<div class="cards">{#each insurances as insurance}<Card><article class="insurance"><div class="insurance-head"><div class="logo">◇</div><span class:inactive={!insurance.active}>{insurance.active?'Ativo':'Inativo'}</span></div><h2>{insurance.company}</h2><p>{insurance.plan}</p><dl><div><dt>Número da carteirinha</dt><dd>{insurance.cardNumber}</dd></div><div><dt>Titular</dt><dd>{insurance.holder}</dd></div><div><dt>Validade</dt><dd>{insurance.validUntil}</dd></div></dl><footer><button>Editar dados</button><button>Ver carteirinha</button></footer></article></Card>{/each}</div>
-{:else}<form onsubmit={(e)=>{e.preventDefault();saved=true}}><Card padding="lg"><div class="form-title"><h2>Informações pessoais</h2><p>Dados utilizados na identificação dos atendimentos.</p></div><div class="form-grid"><FormField id="profile-name" label="Nome completo" value={currentPatient.name}/><FormField id="profile-cpf" label="CPF" value="123.456.789-27" disabled/><FormField id="profile-birth" label="Data de nascimento" type="date" value="1990-05-18"/><FormField id="profile-phone" label="Telefone" type="tel" value="(71) 99999-2211"/><FormField id="profile-email" label="E-mail" type="email" value="mariana@exemplo.com"/><FormField id="profile-responsible" label="Nome do responsável" placeholder="Quando aplicável"/></div></Card><Card padding="lg"><div class="form-title"><h2>Endereço</h2><p>Utilizado para identificação e atendimento domiciliar.</p></div><div class="form-grid"><FormField id="cep" label="CEP" value="40000-000"/><FormField id="street" label="Logradouro" value="Avenida Oceânica"/><FormField id="number" label="Número" value="120"/><FormField id="district" label="Bairro" value="Barra"/><FormField id="city" label="Cidade" value="Salvador"/><FormField id="state" label="Estado" value="Bahia"/></div></Card><div class="save"><Button type="submit">Salvar alterações</Button></div></form>{/if}</div>
-<style>.page{width:min(100%,var(--content-max));margin:0 auto;padding:var(--space-10)}.feedback{max-width:35rem;margin-top:var(--space-6)}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4);margin-top:var(--space-8)}.person{display:grid;grid-template-columns:auto 1fr auto;gap:var(--space-4)}.avatar,.logo{display:grid;width:3rem;height:3rem;place-items:center;border-radius:50%;background:var(--color-brand-50);color:var(--color-brand-600);font-size:var(--text-lg);font-weight:800}:global([data-theme='dark']) .avatar,:global([data-theme='dark']) .logo{background:rgb(23 71 255/.16);color:#8da6ff}.person h2,.insurance h2{font-size:var(--text-lg)}.person p,.insurance>p{margin-top:.25rem;color:var(--text-secondary);font-size:var(--text-sm)}.person>button{align-self:start;border:0;background:transparent;color:var(--text-secondary);cursor:pointer}dl{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4);margin:var(--space-5) 0 0}dt{color:var(--text-tertiary);font-size:var(--text-xs)}dd{margin:.2rem 0 0;font-size:var(--text-sm);font-weight:650}.insurance-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-5)}.insurance-head span{border-radius:var(--radius-pill);background:var(--status-success-bg);padding:.3rem .6rem;color:var(--status-success);font-size:var(--text-xs);font-weight:750}.insurance-head span.inactive{background:var(--surface-subtle);color:var(--text-secondary)}.insurance footer{display:flex;gap:var(--space-5);margin-top:var(--space-5);border-top:1px solid var(--border-subtle);padding-top:var(--space-4)}.insurance footer button{border:0;background:transparent;padding:0;color:var(--color-brand-500);font-size:var(--text-sm);font-weight:700;cursor:pointer}form{display:grid;gap:var(--space-4);margin-top:var(--space-8)}.form-title{margin-bottom:var(--space-6)}.form-title h2{font-size:var(--text-lg)}.form-title p{margin-top:.3rem;color:var(--text-secondary);font-size:var(--text-sm)}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-5)}.save{display:flex;justify-content:flex-end}@media(max-width:750px){.page{padding:var(--space-5)}.cards,.form-grid{grid-template-columns:1fr}}</style>
+
+<div class="page">
+  <PageHeader {...metadata[mode]}>
+    {#snippet actions()}
+      {#if mode === 'family'}<Button
+          onclick={() => {
+            editing = null;
+            dialog = 'dependent';
+          }}>Adicionar dependente</Button
+        >
+      {:else if mode === 'insurance'}<Button
+          onclick={() => {
+            editing = null;
+            dialog = 'insurance';
+          }}>Adicionar convênio</Button
+        >{/if}
+    {/snippet}
+  </PageHeader>
+
+  {#if mode === 'family'}
+    <div class="collection">
+      <CollectionPanel title="Pessoas vinculadas" description={`${family.length} registros`}>
+        {#snippet actions()}<ViewModeToggle bind:value={viewMode} />{/snippet}
+        <div class="cards {viewMode}">
+          {#each family as person}<Card
+              ><article>
+                <div class="avatar">{person.name.slice(0, 1)}</div>
+                <div>
+                  <h2>{person.name}</h2>
+                  <p>{person.relationship} · {person.active === 'true' ? 'Ativo' : 'Inativo'}</p>
+                  <dl>
+                    <div>
+                      <dt>Nascimento</dt>
+                      <dd>{person.birthDate}</dd>
+                    </div>
+                    <div>
+                      <dt>CPF</dt>
+                      <dd>{person.cpf}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    class="link"
+                    onclick={() => {
+                      editing = person;
+                      dialog = 'dependent';
+                    }}>Editar dados</button
+                  >
+                </div>
+              </article></Card
+            >{/each}
+        </div></CollectionPanel
+      >
+    </div>
+  {:else if mode === 'insurance'}
+    <div class="collection">
+      <CollectionPanel title="Planos cadastrados" description={`${insurance.length} registros`}>
+        {#snippet actions()}<ViewModeToggle bind:value={viewMode} />{/snippet}
+        <div class="cards {viewMode}">
+          {#each insurance as item}<Card
+              ><article>
+                <div class="head">
+                  <div class="avatar">◇</div>
+                  <span>{item.active === 'true' ? 'Ativo' : 'Inativo'}</span>
+                </div>
+                <h2>{item.company}</h2>
+                <p>{item.plan}</p>
+                <dl>
+                  <div>
+                    <dt>Carteirinha</dt>
+                    <dd>{item.cardNumber}</dd>
+                  </div>
+                  <div>
+                    <dt>Titular</dt>
+                    <dd>{item.holder}</dd>
+                  </div>
+                  <div>
+                    <dt>Validade</dt>
+                    <dd>{item.validUntil}</dd>
+                  </div>
+                </dl>
+                <footer>
+                  <button
+                    onclick={() => {
+                      editing = item;
+                      dialog = 'insurance';
+                    }}>Editar dados</button
+                  ><button onclick={() => (cardView = item)}>Ver carteirinha</button>
+                </footer>
+              </article></Card
+            >{/each}
+        </div></CollectionPanel
+      >
+    </div>
+  {:else}
+    <form
+      onsubmit={(event) => {
+        event.preventDefault();
+        toast = 'Dados cadastrais salvos com sucesso.';
+      }}
+    >
+      <Card padding="lg"
+        ><h2>Informações pessoais</h2>
+        <div class="form-grid">
+          <FormField id="profile-name" label="Nome completo" value={currentPatient.name} /><FormField
+            id="profile-cpf"
+            label="CPF"
+            value="123.456.789-27"
+            disabled
+          /><FormField id="profile-birth" label="Data de nascimento" type="date" value="1990-05-18" /><FormField
+            id="profile-phone"
+            label="Telefone"
+            type="tel"
+            value="(71) 99999-2211"
+          /><FormField id="profile-email" label="E-mail" type="email" value="mariana@exemplo.com" /><FormField
+            id="profile-responsible"
+            label="Nome do responsável"
+            placeholder="Quando aplicável"
+          />
+        </div></Card
+      >
+      <Card padding="lg"
+        ><h2>Endereço</h2>
+        <div class="form-grid">
+          <FormField id="cep" label="CEP" value="40000-000" /><FormField
+            id="street"
+            label="Logradouro"
+            value="Avenida Oceânica"
+          /><FormField id="number" label="Número" value="120" /><FormField
+            id="district"
+            label="Bairro"
+            value="Barra"
+          /><FormField id="city" label="Cidade" value="Salvador" /><FormField id="state" label="Estado" value="Bahia" />
+        </div></Card
+      >
+      <div class="save"><Button type="submit">Salvar alterações</Button></div>
+    </form>
+  {/if}
+</div>
+
+{#if dialog}<PortalRecordDialog
+    type={dialog}
+    initial={editing ?? {}}
+    onSave={saveRecord}
+    onCancel={() => {
+      dialog = null;
+      editing = null;
+    }}
+  />{/if}
+{#if cardView}<div
+    class="overlay"
+    role="presentation"
+    onclick={(event) => event.target === event.currentTarget && (cardView = null)}
+  >
+    <div class="health-card" role="dialog" aria-modal="true">
+      <small>CARTEIRA DO CONVÊNIO</small>
+      <h2>{cardView.company}</h2>
+      <p>{cardView.plan}</p>
+      <strong>{cardView.cardNumber}</strong><span>{cardView.holder} · Val. {cardView.validUntil}</span><Button
+        variant="secondary"
+        onclick={() => (cardView = null)}>Fechar</Button
+      >
+    </div>
+  </div>{/if}
+{#if toast}<Toast message={toast} onClose={() => (toast = '')} />{/if}
+
+<style>
+  .page {
+    width: min(100%, var(--content-max));
+    margin: 0 auto;
+    padding: var(--space-8);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+  .collection {
+    margin-top: var(--space-6);
+  }
+  .cards.list {
+    grid-template-columns: 1fr;
+  }
+  article {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-4);
+  }
+  .avatar {
+    display: grid;
+    width: 3rem;
+    height: 3rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--color-brand-50);
+    color: var(--color-brand-600);
+    font-weight: 800;
+  }
+  h2 {
+    font-size: var(--text-lg);
+  }
+  article p {
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  dl {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin: var(--space-5) 0;
+  }
+  dt {
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+  }
+  dd {
+    margin: 0.2rem 0 0;
+    font-size: var(--text-sm);
+    font-weight: 650;
+  }
+  .link,
+  footer button {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--color-brand-500);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .head {
+    grid-column: 1/-1;
+    display: flex;
+    justify-content: space-between;
+  }
+  .head span {
+    align-self: flex-start;
+    border-radius: var(--radius-pill);
+    background: var(--status-success-bg);
+    padding: 0.3rem 0.6rem;
+    color: var(--status-success);
+    font-size: var(--text-xs);
+  }
+  article > .head ~ * {
+    grid-column: 1/-1;
+  }
+  footer {
+    display: flex;
+    gap: var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--space-4);
+  }
+  form {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+  form h2 {
+    margin-bottom: var(--space-5);
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+  }
+  .save {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .overlay {
+    position: fixed;
+    z-index: 90;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--surface-overlay);
+    padding: var(--space-5);
+  }
+  .health-card {
+    display: grid;
+    width: min(100%, 28rem);
+    gap: var(--space-3);
+    border-radius: var(--radius-xl);
+    background: linear-gradient(135deg, var(--color-brand-700), var(--color-brand-500));
+    padding: var(--space-6);
+    color: white;
+    box-shadow: var(--shadow-md);
+  }
+  .health-card strong {
+    margin-top: var(--space-6);
+    font-size: var(--text-xl);
+    letter-spacing: 0.08em;
+  }
+  .health-card span {
+    margin-bottom: var(--space-5);
+    font-size: var(--text-sm);
+  }
+  @media (max-width: 750px) {
+    .page {
+      padding: var(--space-5);
+    }
+    .cards,
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

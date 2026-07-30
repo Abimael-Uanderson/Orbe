@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pageFromPath, pathAllowedForRole, roleFromPath } from './navigation';
+import { isKnownPage, pageFromPath, pagePaths, pathAllowedForRole, renderedPageIds, roleFromPath } from './navigation';
 
 describe('navegação por perfil', () => {
   it('resolve URLs conhecidas', () => {
@@ -23,5 +23,10 @@ describe('navegação por perfil', () => {
     expect(pathAllowedForRole('/funcionario/agenda', 'admin')).toBe(false);
     expect(pathAllowedForRole('/paciente/inicio', 'employee')).toBe(false);
     expect(pathAllowedForRole('/admin/dashboard', 'admin')).toBe(true);
+  });
+
+  it('mantém todas as páginas renderizadas registradas no roteador', () => {
+    expect(renderedPageIds.every((page) => isKnownPage(page))).toBe(true);
+    expect(Object.keys(pagePaths).sort()).toEqual([...renderedPageIds].sort());
   });
 });

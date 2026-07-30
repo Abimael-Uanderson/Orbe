@@ -14,8 +14,9 @@
   import EmployeePage from './features/employee/EmployeePage.svelte';
   import AdminPage from './features/admin/AdminPage.svelte';
   import PlaceholderPage from './features/shared/PlaceholderPage.svelte';
+  import SecurityHelpPage from './features/shared/SecurityHelpPage.svelte';
   import ConfirmDialog from './design-system/components/ConfirmDialog.svelte';
-  import { pageFromPath, pagePaths, pathAllowedForRole, roleFromPath, type UserRole } from './lib/navigation';
+  import { isKnownPage, pageFromPath, pagePaths, pathAllowedForRole, roleFromPath, type UserRole } from './lib/navigation';
   let activePage = $state(pageFromPath(location.pathname));
   let authenticated = $state(!!localStorage.getItem('orbe-session-role'));
   let authPage = $state<'login' | 'register' | 'forgot'>(location.pathname === '/cadastro' ? 'register' : location.pathname === '/recuperar-senha' ? 'forgot' : 'login');
@@ -25,8 +26,9 @@
   const titles: Record<string, string> = { vaccines:'Catálogo de vacinas', history:'Carteira vacinal', family:'Minha família', profile:'Dados cadastrais', insurance:'Meus convênios', security:'Segurança', help:'Central de ajuda' };
 
   function navigate(page: string, replace = false) {
-    activePage = page;
-    const path = pagePaths[page] ?? '/paciente/inicio';
+    const targetPage = isKnownPage(page) ? page : 'not-found';
+    activePage = targetPage;
+    const path = pagePaths[targetPage];
     history[replace ? 'replaceState' : 'pushState']({}, '', path);
   }
 
@@ -78,7 +80,7 @@
     {:else if activePage === 'appointments'}<AppointmentsPage onSchedule={() => { bookingVaccine = ''; navigate('booking'); }} />
     {:else if activePage === 'booking'}<BookingPage initialVaccine={bookingVaccine} onFinish={() => navigate('appointments')} onCancel={() => navigate('appointments')} />
     {:else if activePage === 'vaccines'}<VaccineCatalogPage onSchedule={(id) => { bookingVaccine = id; navigate('booking'); }} />
-    {:else if activePage === 'history'}<VaccineHistoryPage />
+    {:else if activePage === 'history'}<VaccineHistoryPage onNavigate={navigate} />
     {:else if activePage === 'family'}<AccountPage mode="family" />
     {:else if activePage === 'insurance'}<AccountPage mode="insurance" />
     {:else if activePage === 'profile'}<AccountPage mode="profile" />
@@ -93,6 +95,8 @@
     {:else if activePage === 'admin-insurance'}<AdminPage mode="insurance" onNavigate={navigate}/>
     {:else if activePage === 'admin-reports'}<AdminPage mode="reports" onNavigate={navigate}/>
     {:else if activePage === 'admin-audit'}<AdminPage mode="audit" onNavigate={navigate}/>
+    {:else if activePage === 'security'}<SecurityHelpPage mode="security" />
+    {:else if activePage === 'help'}<SecurityHelpPage mode="help" />
     {:else if activePage === 'not-found'}<PlaceholderPage title="Página não encontrada" description="O endereço informado não existe ou foi alterado." onBack={() => navigate(role === 'admin' ? 'admin-dashboard' : role === 'employee' ? 'staff-dashboard' : 'home')} />
     {:else if activePage === 'access-denied'}<PlaceholderPage title="Acesso não autorizado" description="Seu perfil não possui permissão para acessar esta área." onBack={() => navigate(role === 'admin' ? 'admin-dashboard' : role === 'employee' ? 'staff-dashboard' : 'home')} />
     {:else}<PlaceholderPage title={titles[activePage] ?? 'Orbe'} onBack={() => navigate(role === 'admin' ? 'admin-dashboard' : role === 'employee' ? 'staff-dashboard' : 'home')} />{/if}

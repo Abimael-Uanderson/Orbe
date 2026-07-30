@@ -1,14 +1,456 @@
 <script lang="ts">
-  import Alert from '../../design-system/components/Alert.svelte';import Button from '../../design-system/components/Button.svelte';import Card from '../../design-system/components/Card.svelte';import PageHeader from '../../design-system/components/PageHeader.svelte';import {currentPatient} from '../../mocks/patient';import {dependents,insurances,vaccines} from '../../mocks/portal';
-  let{initialVaccine='',onFinish,onCancel}:{initialVaccine?:string;onFinish:()=>void;onCancel:()=>void}=$props();let step=$state(1);let patient=$state(currentPatient.id);let vaccine=$state('');let date=$state('2026-07-28');let time=$state('09:30');let insurance=$state('private');let done=$state(false);const steps=['Paciente e vacina','Data e horário','Pagamento','Revisão'];let selectedVaccine=$derived(vaccines.find(v=>v.id===vaccine));let canContinue=$derived(step===1?!!patient&&!!vaccine:step===2?!!date&&!!time:step===3?!!insurance:true);$effect(()=>{if(!vaccine&&initialVaccine)vaccine=initialVaccine});
-  function next(){if(step<4)step+=1;else done=true}function back(){if(step>1)step-=1;else onCancel()}
+  import Alert from '../../design-system/components/Alert.svelte';
+  import Button from '../../design-system/components/Button.svelte';
+  import Card from '../../design-system/components/Card.svelte';
+  import PageHeader from '../../design-system/components/PageHeader.svelte';
+  import Tooltip from '../../design-system/components/Tooltip.svelte';
+  import { currentPatient } from '../../mocks/patient';
+  import { dependents, insurances, vaccines } from '../../mocks/portal';
+  import { createAppointment } from '../../lib/patientRepository';
+  let {
+    initialVaccine = '',
+    onFinish,
+    onCancel,
+  }: { initialVaccine?: string; onFinish: () => void; onCancel: () => void } = $props();
+  let step = $state(1);
+  let patient = $state(currentPatient.id);
+  let vaccine = $state('');
+  let date = $state('2026-07-28');
+  let time = $state('09:30');
+  let insurance = $state('private');
+  let done = $state(false);
+  const steps = ['Paciente e vacina', 'Data e horário', 'Pagamento', 'Revisão'];
+  let selectedVaccine = $derived(vaccines.find((v) => v.id === vaccine));
+  let canContinue = $derived(
+    step === 1 ? !!patient && !!vaccine : step === 2 ? !!date && !!time : step === 3 ? !!insurance : true,
+  );
+  $effect(() => {
+    if (!vaccine && initialVaccine) vaccine = initialVaccine;
+  });
+  function next() {
+    if (step < 4) {
+      step += 1;
+      return;
+    }
+    if (!selectedVaccine) return;
+    createAppointment({
+      patientId: patient,
+      vaccine: selectedVaccine.name,
+      manufacturer: selectedVaccine.manufacturer,
+      date: date === '2026-07-28' ? '28 de julho de 2026' : date,
+      time,
+      location: 'Unidade Centro · Sala a confirmar',
+      dose: selectedVaccine.doses,
+      status: 'confirmed',
+    });
+    done = true;
+  }
+  function back() {
+    if (step > 1) step -= 1;
+    else onCancel();
+  }
 </script>
-<div class="page"><PageHeader eyebrow="Agendamento" title={done?'Agendamento confirmado':'Agendar vacina'} description={done?'Seu horário foi reservado com sucesso.':'Conclua as etapas para reservar seu atendimento.'}/>
-{#if done}<div class="confirmation"><div class="check">✓</div><h2>Tudo certo, {currentPatient.firstName}!</h2><p>Enviamos a confirmação para o e-mail cadastrado.</p><Card><dl><div><dt>Protocolo</dt><dd>ORB-2026-0728</dd></div><div><dt>Vacina</dt><dd>{selectedVaccine?.name}</dd></div><div><dt>Data e horário</dt><dd>28 de julho de 2026 · {time}</dd></div><div><dt>Paciente</dt><dd>{patient===currentPatient.id?currentPatient.name:dependents.find(d=>d.id===patient)?.name}</dd></div></dl></Card><div class="confirm-actions"><Button onclick={onFinish}>Ver meus agendamentos</Button><Button variant="secondary">Baixar comprovante</Button></div></div>
-{:else}<ol class="steps">{#each steps as label,index}<li class:active={step===index+1} class:complete={step>index+1}><span>{step>index+1?'✓':index+1}</span><p>{label}</p></li>{/each}</ol><Card padding="lg">
-{#if step===1}<div class="section-title"><h2>Quem será vacinado?</h2><p>Selecione o titular ou um dependente.</p></div><div class="options"><label class:selected={patient===currentPatient.id}><input type="radio" bind:group={patient} value={currentPatient.id}/><span class="option-icon">F</span><strong>{currentPatient.name}<small>Titular</small></strong></label>{#each dependents as person}<label class:selected={patient===person.id}><input type="radio" bind:group={patient} value={person.id}/><span class="option-icon">{person.name.slice(0,1)}</span><strong>{person.name}<small>{person.relationship} · {person.age}</small></strong></label>{/each}</div><div class="section-title second"><h2>Escolha a vacina</h2><p>São exibidas somente vacinas disponíveis.</p></div><div class="vaccine-options">{#each vaccines.filter(v=>v.available) as item}<label class:selected={vaccine===item.id}><input type="radio" bind:group={vaccine} value={item.id}/><span><strong>{item.name}</strong><small>{item.manufacturer} · {item.doses}</small></span><b>{item.price.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></label>{/each}</div>
-{:else if step===2}<div class="section-title"><h2>Selecione a data e o horário</h2><p>Horários disponíveis na Unidade Centro.</p></div><label class="date-label">Data<input type="date" bind:value={date} min="2026-07-23"/></label><div class="times">{#each ['08:00','08:30','09:00','09:30','10:30','11:00','14:00','14:30'] as item}<button class:selected={time===item} onclick={()=>time=item}>{item}</button>{/each}</div><Alert>Chegue com 10 minutos de antecedência e leve um documento com foto.</Alert>
-{:else if step===3}<div class="section-title"><h2>Como será o atendimento?</h2><p>Escolha entre particular ou um convênio cadastrado.</p></div><div class="payment-options"><label class:selected={insurance==='private'}><input type="radio" bind:group={insurance} value="private"/><span><strong>Particular</strong><small>Pagamento realizado na clínica</small></span><b>{selectedVaccine?.price.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></label>{#each insurances.filter(i=>i.active) as item}<label class:selected={insurance===item.id}><input type="radio" bind:group={insurance} value={item.id}/><span><strong>{item.company}</strong><small>{item.plan} · Final {item.cardNumber.slice(-4)}</small></span><b>Sujeito à análise</b></label>{/each}</div>
-{:else}<div class="section-title"><h2>Revise seu agendamento</h2><p>Confirme se todos os dados estão corretos.</p></div><div class="review"><dl><div><dt>Paciente</dt><dd>{patient===currentPatient.id?currentPatient.name:dependents.find(d=>d.id===patient)?.name}</dd></div><div><dt>Vacina</dt><dd>{selectedVaccine?.name}</dd></div><div><dt>Data e horário</dt><dd>28 de julho de 2026 · {time}</dd></div><div><dt>Unidade</dt><dd>Orbe Centro · Sala a confirmar</dd></div><div><dt>Atendimento</dt><dd>{insurance==='private'?'Particular':insurances.find(i=>i.id===insurance)?.company}</dd></div><div><dt>Valor estimado</dt><dd>{insurance==='private'?selectedVaccine?.price.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'Após análise do convênio'}</dd></div></dl></div><Alert>Ao confirmar, você declara que os dados informados estão corretos.</Alert>{/if}
-<footer><Button variant="secondary" onclick={back}>{step===1?'Cancelar':'Voltar'}</Button><Button onclick={next} disabled={!canContinue}>{step===4?'Confirmar agendamento':'Continuar'}</Button></footer></Card>{/if}</div>
-<style>.page{width:min(100%,65rem);margin:0 auto;padding:var(--space-10)}.steps{display:grid;grid-template-columns:repeat(4,1fr);margin:var(--space-8) 0;padding:0;list-style:none}.steps li{position:relative;display:grid;justify-items:center;gap:var(--space-2);color:var(--text-tertiary);font-size:var(--text-xs);text-align:center}.steps li:not(:last-child)::after{position:absolute;z-index:-1;top:1rem;left:55%;width:90%;height:1px;background:var(--border-strong);content:''}.steps span{display:grid;width:2rem;height:2rem;place-items:center;border:1px solid var(--border-strong);border-radius:50%;background:var(--surface-card);font-weight:800}.steps .active,.steps .complete{color:var(--color-brand-500)}.steps .active span,.steps .complete span{border-color:var(--color-brand-500);background:var(--color-brand-500);color:white}.steps .complete:not(:last-child)::after{background:var(--color-brand-500)}.section-title{margin-bottom:var(--space-5)}.section-title.second{margin-top:var(--space-8)}.section-title h2{font-size:var(--text-xl)}.section-title p{margin-top:var(--space-2);color:var(--text-secondary);font-size:var(--text-sm)}.options{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3)}.options label,.vaccine-options label,.payment-options label{display:flex;align-items:center;gap:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-4);cursor:pointer}.options label.selected,.vaccine-options label.selected,.payment-options label.selected{border-color:var(--color-brand-500);box-shadow:0 0 0 2px var(--focus-ring)}label input[type=radio]{position:absolute;opacity:0}.option-icon{display:grid;width:2.4rem;height:2.4rem;place-items:center;border-radius:50%;background:var(--surface-subtle);color:var(--color-brand-500);font-weight:800}.options strong,.vaccine-options strong,.payment-options strong{font-size:var(--text-sm)}.options small,.vaccine-options small,.payment-options small{display:block;margin-top:.2rem;color:var(--text-secondary);font-weight:400}.vaccine-options,.payment-options{display:grid;gap:var(--space-3)}.vaccine-options label>span,.payment-options label>span{flex:1}.vaccine-options b,.payment-options b{font-size:var(--text-sm)}.date-label{display:grid;max-width:20rem;gap:var(--space-2);font-size:var(--text-sm);font-weight:650}.date-label input{min-height:2.75rem;border:1px solid var(--border-strong);border-radius:var(--radius-md);background:var(--surface-card);padding:0 var(--space-4);color:var(--text-primary)}.times{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-3);margin:var(--space-6) 0}.times button{min-height:2.7rem;border:1px solid var(--border-subtle);border-radius:var(--radius-md);background:var(--surface-card);color:var(--text-primary);cursor:pointer}.times button.selected{border-color:var(--color-brand-500);background:var(--color-brand-50);color:var(--color-brand-600);font-weight:800}:global([data-theme='dark']) .times button.selected{background:rgb(23 71 255/.16);color:#9db0ff}.review{margin-bottom:var(--space-5);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-5)}dl{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-5);margin:0}dt{color:var(--text-tertiary);font-size:var(--text-xs)}dd{margin:.25rem 0 0;font-size:var(--text-sm);font-weight:650}footer{display:flex;justify-content:space-between;margin-top:var(--space-8);border-top:1px solid var(--border-subtle);padding-top:var(--space-5)}.confirmation{display:grid;max-width:38rem;justify-items:center;margin:var(--space-12) auto;text-align:center}.check{display:grid;width:4rem;height:4rem;place-items:center;border-radius:50%;background:var(--status-success-bg);color:var(--status-success);font-size:1.8rem;font-weight:800}.confirmation h2{margin-top:var(--space-5);font-size:var(--text-2xl)}.confirmation>p{margin:var(--space-2) 0 var(--space-6);color:var(--text-secondary)}.confirmation :global(.card){width:100%;text-align:left}.confirm-actions{display:flex;gap:var(--space-3);margin-top:var(--space-6)}@media(max-width:680px){.page{padding:var(--space-5)}.steps p{display:none}.options{grid-template-columns:1fr}.times{grid-template-columns:repeat(3,1fr)}dl{grid-template-columns:1fr}.vaccine-options b,.payment-options b{display:none}.confirm-actions{align-items:stretch;flex-direction:column}}</style>
+
+<div class="page">
+  <PageHeader
+    eyebrow="Agendamento"
+    title={done ? 'Agendamento confirmado' : 'Agendar vacina'}
+    description={done ? 'Seu horário foi reservado com sucesso.' : 'Conclua as etapas para reservar seu atendimento.'}
+  />
+  {#if done}<div class="confirmation">
+      <div class="check">✓</div>
+      <h2>Tudo certo, {currentPatient.firstName}!</h2>
+      <p>Enviamos a confirmação para o e-mail cadastrado.</p>
+      <Card
+        ><dl>
+          <div>
+            <dt>Protocolo</dt>
+            <dd>ORB-2026-0728</dd>
+          </div>
+          <div>
+            <dt>Vacina</dt>
+            <dd>{selectedVaccine?.name}</dd>
+          </div>
+          <div>
+            <dt>Data e horário</dt>
+            <dd>28 de julho de 2026 · {time}</dd>
+          </div>
+          <div>
+            <dt>Paciente</dt>
+            <dd>
+              {patient === currentPatient.id ? currentPatient.name : dependents.find((d) => d.id === patient)?.name}
+            </dd>
+          </div>
+        </dl></Card
+      >
+      <div class="confirm-actions">
+        <Button onclick={onFinish}>Ver meus agendamentos</Button><Button
+          variant="secondary"
+          onclick={() => window.print()}>Imprimir comprovante</Button
+        >
+      </div>
+    </div>
+  {:else}<ol class="steps">
+      {#each steps as label, index}<li class:active={step === index + 1} class:complete={step > index + 1}>
+          <span>{step > index + 1 ? '✓' : index + 1}</span>
+          <p>{label}</p>
+        </li>{/each}
+    </ol>
+    <Card padding="lg">
+      {#if step === 1}<div class="section-title">
+          <h2>Quem será vacinado?</h2>
+          <Tooltip text="Selecione o titular ou um dependente." />
+        </div>
+        <div class="options">
+          <label class:selected={patient === currentPatient.id}
+            ><input type="radio" bind:group={patient} value={currentPatient.id} /><span class="option-icon">F</span
+            ><strong>{currentPatient.name}<small>Titular</small></strong></label
+          >{#each dependents as person}<label class:selected={patient === person.id}
+              ><input type="radio" bind:group={patient} value={person.id} /><span class="option-icon"
+                >{person.name.slice(0, 1)}</span
+              ><strong>{person.name}<small>{person.relationship} · {person.age}</small></strong></label
+            >{/each}
+        </div>
+        <div class="section-title second">
+          <h2>Escolha a vacina</h2>
+          <Tooltip text="São exibidas somente vacinas disponíveis." />
+        </div>
+        <div class="vaccine-options">
+          {#each vaccines.filter((v) => v.available) as item}<label class:selected={vaccine === item.id}
+              ><input type="radio" bind:group={vaccine} value={item.id} /><span
+                ><strong>{item.name}</strong><small>{item.manufacturer} · {item.doses}</small></span
+              ><b>{item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b></label
+            >{/each}
+        </div>
+      {:else if step === 2}<div class="section-title">
+          <h2>Selecione a data e o horário</h2>
+          <Tooltip text="Horários disponíveis na Unidade Centro." />
+        </div>
+        <label class="date-label">Data<input type="date" bind:value={date} min="2026-07-23" /></label>
+        <div class="times">
+          {#each ['08:00', '08:30', '09:00', '09:30', '10:30', '11:00', '14:00', '14:30'] as item}<button
+              class:selected={time === item}
+              onclick={() => (time = item)}>{item}</button
+            >{/each}
+        </div>
+        <Alert>Chegue com 10 minutos de antecedência e leve um documento com foto.</Alert>
+      {:else if step === 3}<div class="section-title">
+          <h2>Como será o atendimento?</h2>
+          <Tooltip text="Escolha entre particular ou um convênio cadastrado." />
+        </div>
+        <div class="payment-options">
+          <label class:selected={insurance === 'private'}
+            ><input type="radio" bind:group={insurance} value="private" /><span
+              ><strong>Particular</strong><small>Pagamento realizado na clínica</small></span
+            ><b>{selectedVaccine?.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b></label
+          >{#each insurances.filter((i) => i.active) as item}<label class:selected={insurance === item.id}
+              ><input type="radio" bind:group={insurance} value={item.id} /><span
+                ><strong>{item.company}</strong><small>{item.plan} · Final {item.cardNumber.slice(-4)}</small></span
+              ><b>Sujeito à análise</b></label
+            >{/each}
+        </div>
+      {:else}<div class="section-title">
+          <h2>Revise seu agendamento</h2>
+          <Tooltip text="Confirme se todos os dados estão corretos." />
+        </div>
+        <div class="review">
+          <dl>
+            <div>
+              <dt>Paciente</dt>
+              <dd>
+                {patient === currentPatient.id ? currentPatient.name : dependents.find((d) => d.id === patient)?.name}
+              </dd>
+            </div>
+            <div>
+              <dt>Vacina</dt>
+              <dd>{selectedVaccine?.name}</dd>
+            </div>
+            <div>
+              <dt>Data e horário</dt>
+              <dd>28 de julho de 2026 · {time}</dd>
+            </div>
+            <div>
+              <dt>Unidade</dt>
+              <dd>Orbe Centro · Sala a confirmar</dd>
+            </div>
+            <div>
+              <dt>Atendimento</dt>
+              <dd>{insurance === 'private' ? 'Particular' : insurances.find((i) => i.id === insurance)?.company}</dd>
+            </div>
+            <div>
+              <dt>Valor estimado</dt>
+              <dd>
+                {insurance === 'private'
+                  ? selectedVaccine?.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                  : 'Após análise do convênio'}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <Alert>Ao confirmar, você declara que os dados informados estão corretos.</Alert>{/if}
+      <footer>
+        <Button variant="secondary" onclick={back}>{step === 1 ? 'Cancelar' : 'Voltar'}</Button><Button
+          onclick={next}
+          disabled={!canContinue}>{step === 4 ? 'Confirmar agendamento' : 'Continuar'}</Button
+        >
+      </footer></Card
+    >{/if}
+</div>
+
+<style>
+  .page {
+    width: min(100%, 65rem);
+    margin: 0 auto;
+    padding: var(--space-8);
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    margin: var(--space-6) 0;
+    padding: 0;
+    list-style: none;
+  }
+  .steps li {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    text-align: center;
+  }
+  .steps li:not(:last-child)::after {
+    position: absolute;
+    z-index: -1;
+    top: 1rem;
+    left: 55%;
+    width: 90%;
+    height: 1px;
+    background: var(--border-strong);
+    content: '';
+  }
+  .steps span {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--surface-card);
+    font-weight: 800;
+  }
+  .steps .active,
+  .steps .complete {
+    color: var(--color-brand-500);
+  }
+  .steps .active span,
+  .steps .complete span {
+    border-color: var(--color-brand-500);
+    background: var(--color-brand-500);
+    color: white;
+  }
+  .steps .complete:not(:last-child)::after {
+    background: var(--color-brand-500);
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+  .section-title.second {
+    margin-top: var(--space-6);
+  }
+  .section-title h2 {
+    font-size: var(--text-xl);
+  }
+  .options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+  }
+  .options label,
+  .vaccine-options label,
+  .payment-options label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    cursor: pointer;
+  }
+  .options label.selected,
+  .vaccine-options label.selected,
+  .payment-options label.selected {
+    border-color: var(--color-brand-500);
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+  label input[type='radio'] {
+    position: absolute;
+    opacity: 0;
+  }
+  .option-icon {
+    display: grid;
+    width: 2.4rem;
+    height: 2.4rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--surface-subtle);
+    color: var(--color-brand-500);
+    font-weight: 800;
+  }
+  .options strong,
+  .vaccine-options strong,
+  .payment-options strong {
+    font-size: var(--text-sm);
+  }
+  .options small,
+  .vaccine-options small,
+  .payment-options small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+  .vaccine-options,
+  .payment-options {
+    display: grid;
+    gap: var(--space-3);
+  }
+  .vaccine-options label > span,
+  .payment-options label > span {
+    flex: 1;
+  }
+  .vaccine-options b,
+  .payment-options b {
+    font-size: var(--text-sm);
+  }
+  .date-label {
+    display: grid;
+    max-width: 20rem;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 650;
+  }
+  .date-label input {
+    min-height: 2.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    padding: 0 var(--space-4);
+    color: var(--text-primary);
+  }
+  .times {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+    margin: var(--space-6) 0;
+  }
+  .times button {
+    min-height: 2.7rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .times button.selected {
+    border-color: var(--color-brand-500);
+    background: var(--color-brand-50);
+    color: var(--color-brand-600);
+    font-weight: 800;
+  }
+  :global([data-theme='dark']) .times button.selected {
+    background: rgb(23 71 255/0.16);
+    color: #9db0ff;
+  }
+  .review {
+    margin-bottom: var(--space-5);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+  }
+  dl {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+    margin: 0;
+  }
+  dt {
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+  }
+  dd {
+    margin: 0.25rem 0 0;
+    font-size: var(--text-sm);
+    font-weight: 650;
+  }
+  footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-6);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--space-5);
+  }
+  .confirmation {
+    display: grid;
+    max-width: 38rem;
+    justify-items: center;
+    margin: var(--space-12) auto;
+    text-align: center;
+  }
+  .check {
+    display: grid;
+    width: 4rem;
+    height: 4rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--status-success-bg);
+    color: var(--status-success);
+    font-size: 1.8rem;
+    font-weight: 800;
+  }
+  .confirmation h2 {
+    margin-top: var(--space-5);
+    font-size: var(--text-2xl);
+  }
+  .confirmation > p {
+    margin: var(--space-2) 0 var(--space-6);
+    color: var(--text-secondary);
+  }
+  .confirmation :global(.card) {
+    width: 100%;
+    text-align: left;
+  }
+  .confirm-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+  @media (max-width: 680px) {
+    .page {
+      padding: var(--space-5);
+    }
+    .steps p {
+      display: none;
+    }
+    .options {
+      grid-template-columns: 1fr;
+    }
+    .times {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    dl {
+      grid-template-columns: 1fr;
+    }
+    .vaccine-options b,
+    .payment-options b {
+      display: none;
+    }
+    .confirm-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+</style>
