@@ -1,8 +1,82 @@
 <script lang="ts">
-  import Alert from '../../design-system/components/Alert.svelte'; import Button from '../../design-system/components/Button.svelte'; import FormField from '../../design-system/components/FormField.svelte';
-  let { onBack }: { onBack:()=>void }=$props(); let email=$state('');let sent=$state(false);let error=$state('');
-  function submit(e:SubmitEvent){e.preventDefault();error='';if(!email.includes('@')){error='Informe um endereço de e-mail válido.';return}sent=true}
+  import Alert from '../../design-system/components/Alert.svelte';
+  import Button from '../../design-system/components/Button.svelte';
+  import FormField from '../../design-system/components/FormField.svelte';
+  let { onBack }: { onBack: () => void } = $props();
+  let email = $state('');
+  let sent = $state(false);
+  let error = $state('');
+  function submit(e: SubmitEvent) {
+    e.preventDefault();
+    error = '';
+    if (!email.includes('@')) {
+      error = 'Informe um endereço de e-mail válido.';
+      return;
+    }
+    sent = true;
+  }
 </script>
-<button class="back" onclick={onBack}>← Voltar ao login</button><div class="heading"><p>Recuperação de senha</p><h2>{sent?'Confira seu e-mail':'Esqueceu sua senha?'}</h2><span>{sent?'Enviamos as orientações para redefinir seu acesso.':'Informe o e-mail cadastrado e enviaremos as instruções.'}</span></div>
-{#if sent}<div class="content"><Alert tone="success">Se existir uma conta associada a <strong>{email}</strong>, você receberá um link válido por 30 minutos.</Alert><Button variant="secondary" fullWidth onclick={onBack}>Voltar ao login</Button></div>{:else}<form onsubmit={submit} novalidate>{#if error}<Alert tone="danger">{error}</Alert>{/if}<FormField id="recovery-email" label="E-mail" type="email" autocomplete="email" placeholder="nome@exemplo.com" value={email} oninput={(v)=>email=v} required/><Button type="submit" fullWidth>Enviar instruções</Button></form>{/if}
-<style>.back{margin-bottom:var(--space-8);border:0;background:transparent;padding:0;color:var(--color-brand-500);font-size:var(--text-sm);font-weight:700;cursor:pointer}.heading>p{color:var(--color-brand-500);font-size:var(--text-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase}.heading h2{margin-top:var(--space-3);font-size:var(--text-3xl);letter-spacing:-.04em}.heading span{display:block;margin-top:var(--space-3);color:var(--text-secondary);line-height:1.55}form,.content{display:grid;gap:var(--space-5);margin-top:var(--space-8)}</style>
+
+<button class="back" onclick={onBack}>← Voltar ao login</button>
+<div class="heading">
+  <p>Recuperação de senha</p>
+  <h2>{sent ? 'Confira seu e-mail' : 'Esqueceu sua senha?'}</h2>
+  <span
+    >{sent
+      ? 'Enviamos as orientações para redefinir seu acesso.'
+      : 'Informe o e-mail cadastrado e enviaremos as instruções.'}</span
+  >
+</div>
+{#if sent}<div class="content">
+    <Alert tone="success"
+      >Se existir uma conta associada a <strong>{email}</strong>, você receberá um link válido por 30 minutos.</Alert
+    ><Button variant="secondary" fullWidth onclick={onBack}>Voltar ao login</Button>
+  </div>{:else}<form onsubmit={submit} novalidate>
+    {#if error}<Alert tone="danger">{error}</Alert>{/if}<FormField
+      id="recovery-email"
+      label="E-mail"
+      type="email"
+      autocomplete="email"
+      placeholder="nome@exemplo.com"
+      value={email}
+      oninput={(v) => (email = v)}
+      required
+    /><Button type="submit" fullWidth>Enviar instruções</Button>
+  </form>{/if}
+
+<style>
+  .back {
+    margin-bottom: var(--space-6);
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--color-brand-500);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .heading > p {
+    color: var(--color-brand-500);
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .heading h2 {
+    margin-top: var(--space-3);
+    font-size: var(--text-3xl);
+    letter-spacing: -0.04em;
+  }
+  .heading span {
+    display: block;
+    margin-top: var(--space-3);
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  form,
+  .content {
+    display: grid;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+  }
+</style>
